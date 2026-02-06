@@ -22,6 +22,7 @@ func Execute() error {
 		newUpCommand(),
 		newDownCommand(),
 		newCreateCommand(),
+		newCreateClusterAliasCommand(),
 		newConfigCommand(),
 		newGetCommand(),
 		newGetCredentialsCommand(),

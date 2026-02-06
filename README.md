@@ -103,13 +103,16 @@ Planned for later releases:
 - Multi-cluster controller manager
 - Worker node management (join/leave)
 
-## Common Commands
+## Commands
 
-```
-kplane up
-kplane down
-kplane create cluster demo
-kplane get clusters
-kplane get-credentials demo
-kplane config use-context kplane-demo (or kubectl config use-context)
-```
+- `kplane up` — creates or reuses the Kind management cluster and installs the
+  management plane stack (etcd, shared apiserver, controlplane-operator, CRDs).
+- `kplane down` — deletes the management Kind cluster.
+- `kplane create cluster <name>` — creates a `ControlPlane` and
+  `ControlPlaneEndpoint` and writes a VCP kubeconfig context.
+- `kplane cc <name>` — alias for `kplane create cluster <name>`.
+- `kplane get clusters` — lists the management cluster and existing VCPs.
+- `kplane get-credentials <name>` — writes kubeconfig for a Kind cluster or VCP
+  and optionally switches the current context.
+- `kplane config use-context <name>` — switches your kubeconfig context (aliasing
+  `kubectl config use-context`).

@@ -21,6 +21,14 @@ func newCreateCommand() *cobra.Command {
 }
 
 func newCreateClusterCommand() *cobra.Command {
+	return newCreateClusterCommandWithUse("cluster <name>", "Create a ControlPlane resource")
+}
+
+func newCreateClusterAliasCommand() *cobra.Command {
+	return newCreateClusterCommandWithUse("cc <name>", "Alias for create cluster")
+}
+
+func newCreateClusterCommandWithUse(useLine, short string) *cobra.Command {
 	var (
 		name           string
 		className      string
@@ -36,8 +44,8 @@ func newCreateClusterCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "cluster <name>",
-		Short: "Create a ControlPlane resource",
+		Use:   useLine,
+		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := mustConfig()
