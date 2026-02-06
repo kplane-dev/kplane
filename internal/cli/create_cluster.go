@@ -269,6 +269,20 @@ func logWaitStatus(ctx context.Context, managementCtx, controlPlaneName string, 
 		return
 	}
 	endpoint, _ := kubectl.GetJSONPath(ctx, managementCtx, "controlplane", controlPlaneName, "", "{.status.endpoint}")
+	if endpoint == "" {
+		endpointRef, _ := kubectl.GetJSONPath(ctx, managementCtx, "controlplane", controlPlaneName, "", "{.spec.endpointRef.name}")
+		if endpointRef != "" {
+			externalEndpoint, _ := kubectl.GetJSONPath(ctx, managementCtx, "controlplaneendpoint", endpointRef, "", "{.spec.externalEndpoint}")
+			if externalEndpoint != "" {
+				endpoint = externalEndpoint
+			} else {
+				internalEndpoint, _ := kubectl.GetJSONPath(ctx, managementCtx, "controlplaneendpoint", endpointRef, "", "{.spec.endpoint}")
+				if internalEndpoint != "" {
+					endpoint = internalEndpoint
+				}
+			}
+		}
+	}
 	ready, _ := kubectl.GetJSONPath(ctx, managementCtx, "controlplane", controlPlaneName, "", "{.status.conditions[?(@.type==\"Ready\")].status}")
 	if logf != nil {
 		if endpoint == "" && ready == "" {
