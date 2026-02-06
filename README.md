@@ -23,6 +23,25 @@ by a shared API server, isolated by request path
 - [Linux (amd64)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-linux-amd64)
 - [Windows (amd64)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-windows-amd64.exe)
 
+Install to your PATH:
+
+```
+curl -fsSL https://raw.githubusercontent.com/kplane-dev/kplane/main/scripts/install.sh | sh
+```
+
+Or download manually and make it executable:
+
+```
+chmod +x ./kplane-<os>-<arch>
+```
+
+macOS Gatekeeper (temporary): unsigned binaries may be blocked. If you see a
+warning, run:
+
+```
+xattr -d com.apple.quarantine ./kplane-<os>-<arch>
+```
+
 ## Prereqs
 
 - Go 1.22+ (to build the CLI)
