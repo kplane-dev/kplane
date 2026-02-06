@@ -60,6 +60,7 @@ add_alias() {
   if [ -f "${rc_file}" ] && ! grep -q '^alias kp="kplane"$' "${rc_file}"; then
     printf '\n# kplane\nalias kp="kplane"\n' >> "${rc_file}"
     echo "added alias to ${rc_file}"
+    echo "reload your shell to use kp (e.g. 'source ${rc_file}')"
   fi
 }
 
