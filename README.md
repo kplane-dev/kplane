@@ -15,6 +15,14 @@ control planes (VCPs). Each VCP is a logical Kubernetes control plane backed
 by a shared API server, isolated by request path
 (`.../clusters/<name>/control-plane`).
 
+## Download (Latest)
+
+- [macOS (Apple Silicon)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-darwin-arm64)
+- [macOS (Intel)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-darwin-amd64)
+- [Linux (arm64)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-linux-arm64)
+- [Linux (amd64)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-linux-amd64)
+- [Windows (amd64)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-windows-amd64.exe)
+
 ## Prereqs
 
 - Go 1.22+ (to build the CLI)
