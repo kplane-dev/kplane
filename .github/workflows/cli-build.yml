@@ -69,8 +69,11 @@ jobs:
           EXT=""
           if [ "${GOOS}" = "windows" ]; then EXT=".exe"; fi
           go build -o "dist/kplane-${VERSION}-${GOOS}-${GOARCH}${EXT}" ./cmd/kplane
+          cp "dist/kplane-${VERSION}-${GOOS}-${GOARCH}${EXT}" "dist/kplane-${GOOS}-${GOARCH}${EXT}"
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/kplane-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}*
+          files: |
+            dist/kplane-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}*
+            dist/kplane-${{ matrix.goos }}-${{ matrix.goarch }}*
