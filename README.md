@@ -29,6 +29,9 @@ Install to your PATH:
 curl -fsSL https://raw.githubusercontent.com/kplane-dev/kplane/main/scripts/install.sh | sh
 ```
 
+The installer adds `alias kp="kplane"` to your shell rc file. Restart your
+shell (or run `source ~/.zshrc` / `source ~/.bashrc`) to use `kp`.
+
 Or download manually and make it executable:
 
 ```
