@@ -103,10 +103,10 @@ Planned for later releases:
 ## Common Commands
 
 ```
-./bin/kplane up
-./bin/kplane down
-./bin/kplane create cluster demo
-./bin/kplane get clusters
-./bin/kplane get-credentials demo
-./bin/kplane config use-context kplane-demo
+kplane up
+kplane down
+kplane create cluster demo
+kplane get clusters
+kplane get-credentials demo
+kplane config use-context kplane-demo (or kubectl config use-context)
 ```
