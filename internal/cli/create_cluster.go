@@ -31,6 +31,8 @@ func newCreateClusterCommand() *cobra.Command {
 		timeout        time.Duration
 		namespace      string
 		managementCtx  string
+		quiet          bool
+		noColor        bool
 	)
 
 	cmd := &cobra.Command{
@@ -43,6 +45,8 @@ func newCreateClusterCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			showNext := profile.UI.CreateHintCount < 3
+			ui := NewUI(cmd.OutOrStdout(), profile.UI.Enabled && !quiet, profile.UI.Color && !noColor)
 
 			if name == "" {
 				name = args[0]
@@ -73,9 +77,11 @@ func newCreateClusterCommand() *cobra.Command {
 				return err
 			}
 			manifest := renderControlPlaneManifest(name, className, internalEndpoint, externalEndpoint)
-			if err := kubectl.Apply(cmd.Context(), kubectl.ApplyOptions{
-				Context: managementCtx,
-				Stdin:   []byte(manifest),
+			if err := ui.Step("controlplane: applying manifest", func() error {
+				return kubectl.Apply(cmd.Context(), kubectl.ApplyOptions{
+					Context: managementCtx,
+					Stdin:   []byte(manifest),
+				})
 			}); err != nil {
 				return err
 			}
@@ -84,28 +90,58 @@ func newCreateClusterCommand() *cobra.Command {
 				return nil
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), "waiting for controlplane to reconcile...")
-			if err := waitForControlPlaneReady(cmd.Context(), managementCtx, name, timeout); err != nil {
+			logf := func(format string, args ...any) {
+				if ui.Enabled() {
+					ui.Infof(format, args...)
+					return
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), format+"\n", args...)
+			}
+			if err := ui.Step("controlplane: waiting for readiness", func() error {
+				return waitForControlPlaneReady(cmd.Context(), managementCtx, name, timeout, logf)
+			}); err != nil {
 				return err
 			}
-			secretName := "apiserver-kubeconfig"
-			secretNamespace := namespace
-			kubeconfigData, err := kubectl.GetSecretData(cmd.Context(), managementCtx, secretName, secretNamespace, "kubeconfig")
+			secretName, secretNamespace, err := controlPlaneKubeconfigRef(cmd.Context(), managementCtx, name, namespace)
 			if err != nil {
 				return err
 			}
-			kubeconfigData, err = kubeconfig.RewriteServer(kubeconfigData, externalEndpoint)
-			if err != nil {
+			var kubeconfigData []byte
+			if err := ui.Step("kubeconfig: updating", func() error {
+				var err error
+				kubeconfigData, err = kubectl.GetSecretData(cmd.Context(), managementCtx, secretName, secretNamespace, "kubeconfig")
+				if err != nil {
+					return err
+				}
+				kubeconfigData, err = kubeconfig.RewriteServer(kubeconfigData, externalEndpoint)
+				if err != nil {
+					return err
+				}
+				kubeconfigData, err = kubeconfig.RenameContext(kubeconfigData, fmt.Sprintf("kplane-%s", name))
+				if err != nil {
+					return err
+				}
+				return kubeconfig.MergeAndWrite(kubeconfigOut, kubeconfigData, setCurrent)
+			}); err != nil {
 				return err
 			}
-			kubeconfigData, err = kubeconfig.RenameContext(kubeconfigData, fmt.Sprintf("kplane-%s", name))
-			if err != nil {
-				return err
+			if ui.Enabled() {
+				ui.Successf("kubeconfig: updated (set current=%t)", setCurrent)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "updated kubeconfig (current context=%t)\n", setCurrent)
 			}
-			if err := kubeconfig.MergeAndWrite(kubeconfigOut, kubeconfigData, setCurrent); err != nil {
-				return err
+			if showNext {
+				if ui.Enabled() {
+					ui.Infof("")
+					ui.Successf("next: try it out")
+					ui.Successf("  kubectl get ns")
+				} else {
+					fmt.Fprintln(cmd.OutOrStdout())
+					fmt.Fprintln(cmd.OutOrStdout(), "next: try it out")
+					fmt.Fprintln(cmd.OutOrStdout(), "  kubectl get ns")
+				}
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "updated kubeconfig (current context=%t)\n", setCurrent)
+			_ = markUICompletion(cfg, false, true)
 			return nil
 		},
 	}
@@ -119,6 +155,8 @@ func newCreateClusterCommand() *cobra.Command {
 	cmd.Flags().StringVar(&kubeconfigOut, "kubeconfig", "", "Kubeconfig path to update")
 	cmd.Flags().DurationVar(&timeout, "timeout", 5*time.Minute, "Wait timeout for controlplane readiness")
 	cmd.Flags().StringVar(&managementCtx, "management-context", "", "Kubeconfig context for management plane (kind-<cluster>)")
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "Disable progress output")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 	return cmd
 }
 
@@ -182,7 +220,25 @@ func resolveIngressPortFromCluster(ctx context.Context, managementCtx, namespace
 	return port
 }
 
-func waitForControlPlaneReady(ctx context.Context, managementCtx, controlPlaneName string, timeout time.Duration) error {
+func controlPlaneKubeconfigRef(ctx context.Context, managementCtx, controlPlaneName, fallbackNamespace string) (string, string, error) {
+	name, err := kubectl.GetJSONPath(ctx, managementCtx, "controlplane", controlPlaneName, "", "{.status.kubeconfigSecretRef.name}")
+	if err != nil {
+		return "", "", err
+	}
+	namespace, err := kubectl.GetJSONPath(ctx, managementCtx, "controlplane", controlPlaneName, "", "{.status.kubeconfigSecretRef.namespace}")
+	if err != nil {
+		return "", "", err
+	}
+	if name != "" && namespace != "" {
+		return name, namespace, nil
+	}
+	if fallbackNamespace == "" {
+		fallbackNamespace = "kplane-system"
+	}
+	return "apiserver-kubeconfig", fallbackNamespace, nil
+}
+
+func waitForControlPlaneReady(ctx context.Context, managementCtx, controlPlaneName string, timeout time.Duration, logf func(string, ...any)) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -197,27 +253,35 @@ func waitForControlPlaneReady(ctx context.Context, managementCtx, controlPlaneNa
 		case <-ticker.C:
 			ready, err := kubectl.GetJSONPath(ctx, managementCtx, "controlplane", controlPlaneName, "", "{.status.conditions[?(@.type==\"Ready\")].status}")
 			if err != nil {
-				logWaitStatus(ctx, managementCtx, controlPlaneName, &lastLog)
+				logWaitStatus(ctx, managementCtx, controlPlaneName, &lastLog, logf)
 				continue
 			}
 			if ready == "True" {
 				return nil
 			}
-			logWaitStatus(ctx, managementCtx, controlPlaneName, &lastLog)
+			logWaitStatus(ctx, managementCtx, controlPlaneName, &lastLog, logf)
 		}
 	}
 }
 
-func logWaitStatus(ctx context.Context, managementCtx, controlPlaneName string, lastLog *time.Time) {
+func logWaitStatus(ctx context.Context, managementCtx, controlPlaneName string, lastLog *time.Time, logf func(string, ...any)) {
 	if lastLog != nil && time.Since(*lastLog) < 10*time.Second {
 		return
 	}
 	endpoint, _ := kubectl.GetJSONPath(ctx, managementCtx, "controlplane", controlPlaneName, "", "{.status.endpoint}")
 	ready, _ := kubectl.GetJSONPath(ctx, managementCtx, "controlplane", controlPlaneName, "", "{.status.conditions[?(@.type==\"Ready\")].status}")
-	if endpoint == "" && ready == "" {
-		fmt.Println("waiting for controlplane to reconcile...")
+	if logf != nil {
+		if endpoint == "" && ready == "" {
+			logf("controlplane status: waiting for reconcile")
+		} else {
+			logf("controlplane status: ready=%s endpoint=%s", ready, endpoint)
+		}
 	} else {
-		fmt.Printf("controlplane status: ready=%s endpoint=%s\n", ready, endpoint)
+		if endpoint == "" && ready == "" {
+			fmt.Println("waiting for controlplane to reconcile...")
+		} else {
+			fmt.Printf("controlplane status: ready=%s endpoint=%s\n", ready, endpoint)
+		}
 	}
 	if lastLog != nil {
 		*lastLog = time.Now()

@@ -70,7 +70,7 @@ func newGetCredentialsCommand() *cobra.Command {
 			ready, err := kubectl.GetJSONPath(cmd.Context(), managementCtx, "controlplane", clusterName, "", "{.status.conditions[?(@.type==\"Ready\")].status}")
 			if err != nil || ready != "True" {
 				fmt.Fprintln(cmd.OutOrStdout(), "waiting for controlplane to reconcile...")
-				if err := waitForControlPlaneReady(cmd.Context(), managementCtx, clusterName, timeout); err != nil {
+				if err := waitForControlPlaneReady(cmd.Context(), managementCtx, clusterName, timeout, nil); err != nil {
 					return err
 				}
 			}
@@ -79,8 +79,10 @@ func newGetCredentialsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			secretName := "apiserver-kubeconfig"
-			secretNamespace := profile.Namespace
+			secretName, secretNamespace, err := controlPlaneKubeconfigRef(cmd.Context(), managementCtx, clusterName, profile.Namespace)
+			if err != nil {
+				return err
+			}
 			kubeconfigData, err := kubectl.GetSecretData(cmd.Context(), managementCtx, secretName, secretNamespace, "kubeconfig")
 			if err != nil {
 				return err
