@@ -42,6 +42,9 @@ func newUpCommand() *cobra.Command {
 			}
 			showNext := profile.UI.UpHintCount < 3
 			ui := NewUI(cmd.OutOrStdout(), profile.UI.Enabled && !quiet, profile.UI.Color && !noColor)
+			if ui.Enabled() {
+				printBanner(cmd.OutOrStdout())
+			}
 
 			applyUpDefaults(&provider, &clusterName, &namespace, &apiserverImg, &operatorImg, &etcdImg, &stackVersion, &crdSource, &kubeconfigOut, &setCurrent, profile)
 
