@@ -55,4 +55,19 @@ if [ "${OS}" = "darwin" ] && command -v xattr >/dev/null 2>&1; then
   xattr -d com.apple.quarantine "${TARGET}" 2>/dev/null || true
 fi
 
+add_alias() {
+  rc_file="$1"
+  if [ -f "${rc_file}" ] && ! grep -q '^alias kp="kplane"$' "${rc_file}"; then
+    printf '\n# kplane\nalias kp="kplane"\n' >> "${rc_file}"
+    echo "added alias to ${rc_file}"
+  fi
+}
+
+if [ -n "${SHELL:-}" ]; then
+  case "${SHELL}" in
+    */zsh) add_alias "${HOME}/.zshrc" ;;
+    */bash) add_alias "${HOME}/.bashrc" ;;
+  esac
+fi
+
 echo "installed ${TARGET}"
