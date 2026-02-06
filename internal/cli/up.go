@@ -27,6 +27,8 @@ func newUpCommand() *cobra.Command {
 		installCRDs   bool
 		kubeconfigOut string
 		setCurrent    bool
+		quiet         bool
+		noColor       bool
 	)
 
 	cmd := &cobra.Command{
@@ -38,6 +40,8 @@ func newUpCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			showNext := profile.UI.UpHintCount < 3
+			ui := NewUI(cmd.OutOrStdout(), profile.UI.Enabled && !quiet, profile.UI.Color && !noColor)
 
 			applyUpDefaults(&provider, &clusterName, &namespace, &apiserverImg, &operatorImg, &etcdImg, &stackVersion, &crdSource, &kubeconfigOut, &setCurrent, profile)
 
@@ -58,41 +62,48 @@ func newUpCommand() *cobra.Command {
 			}
 			var ingressPort int
 			if !exists {
-				ingressPort, err = resolveIngressPort(profile.Kind.IngressPort)
-				if err != nil {
-					return err
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "kind: creating management cluster %s\n", clusterName)
-				configPath := profile.Kind.ConfigPath
-				if configPath == "" {
-					configPath, err = writeKindConfig(ingressPort)
+				if err := ui.Step("kind: creating management cluster "+clusterName, func() error {
+					var err error
+					ingressPort, err = resolveIngressPort(profile.Kind.IngressPort)
 					if err != nil {
 						return err
 					}
-				}
-				if err := kindprovider.CreateCluster(ctx, kindprovider.CreateOptions{
-					Name:       clusterName,
-					NodeImage:  profile.Kind.NodeImage,
-					ConfigPath: configPath,
+					configPath := profile.Kind.ConfigPath
+					if configPath == "" {
+						configPath, err = writeKindConfig(ingressPort)
+						if err != nil {
+							return err
+						}
+					}
+					return kindprovider.CreateCluster(ctx, kindprovider.CreateOptions{
+						Name:       clusterName,
+						NodeImage:  profile.Kind.NodeImage,
+						ConfigPath: configPath,
+					})
 				}); err != nil {
 					return err
 				}
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "kind: reusing existing cluster %s\n", clusterName)
+				if ui.Enabled() {
+					ui.Infof("kind: reusing existing cluster %s", clusterName)
+				}
 				ingressPort = resolveIngressPortFromCluster(ctx, fmt.Sprintf("kind-%s", clusterName), namespace)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "kubeconfig: updating (set current=%t)\n", setCurrent)
-			kubeconfigData, err := kindprovider.GetKubeconfig(ctx, clusterName)
-			if err != nil {
-				return err
-			}
-			if err := kubeconfig.MergeAndWrite(kubeconfigOut, kubeconfigData, setCurrent); err != nil {
+			if err := ui.Step("kubeconfig: updating", func() error {
+				kubeconfigData, err := kindprovider.GetKubeconfig(ctx, clusterName)
+				if err != nil {
+					return err
+				}
+				return kubeconfig.MergeAndWrite(kubeconfigOut, kubeconfigData, setCurrent)
+			}); err != nil {
 				return err
 			}
 
 			contextName := fmt.Sprintf("kind-%s", clusterName)
-			if err := kubectl.LabelNodes(ctx, contextName, map[string]string{"ingress-ready": "true"}); err != nil {
+			if err := ui.Step("nodes: labeling ingress-ready", func() error {
+				return kubectl.LabelNodes(ctx, contextName, map[string]string{"ingress-ready": "true"})
+			}); err != nil {
 				return err
 			}
 			resolvedVersion, err := resolveStackVersion(stackVersion)
@@ -102,28 +113,51 @@ func newUpCommand() *cobra.Command {
 
 			switch resolvedVersion {
 			case "latest":
-				fmt.Fprintf(cmd.OutOrStdout(), "stack: installing %s\n", resolvedVersion)
-				if err := stacklatest.Install(cmd.Context(), stacklatest.InstallOptions{
-					Context:   contextName,
-					Namespace: namespace,
-					Images: stacklatest.Images{
-						Apiserver: apiserverImg,
-						Operator:  operatorImg,
-						Etcd:      etcdImg,
-					},
-					CRDSource:   crdSource,
-					InstallCRDs: installCRDs,
-					Logf: func(format string, args ...any) {
-						fmt.Fprintf(cmd.OutOrStdout(), "stack: %s\n", fmt.Sprintf(format, args...))
-					},
+				if err := ui.Step("stack: installing management plane", func() error {
+					return stacklatest.Install(cmd.Context(), stacklatest.InstallOptions{
+						Context:   contextName,
+						Namespace: namespace,
+						Images: stacklatest.Images{
+							Apiserver: apiserverImg,
+							Operator:  operatorImg,
+							Etcd:      etcdImg,
+						},
+						CRDSource:   crdSource,
+						InstallCRDs: installCRDs,
+						Logf: func(format string, args ...any) {
+							msg := fmt.Sprintf(format, args...)
+							if ui.Enabled() {
+								ui.Infof("stack: %s", msg)
+							} else {
+								fmt.Fprintf(cmd.OutOrStdout(), "stack: %s\n", msg)
+							}
+						},
+					})
 				}); err != nil {
 					return err
 				}
-				if err := applyIngressConfig(cmd.Context(), contextName, namespace, ingressPort); err != nil {
+				if err := ui.Step("ingress: recording port", func() error {
+					return applyIngressConfig(cmd.Context(), contextName, namespace, ingressPort)
+				}); err != nil {
 					return err
 				}
-				fmt.Fprintln(cmd.OutOrStdout(), "ready: management plane is up")
-				fmt.Fprintf(cmd.OutOrStdout(), "next: create a control plane with `kplane create cluster <name>`\n")
+				if ui.Enabled() {
+					ui.Successf("ready: management plane is up")
+				} else {
+					fmt.Fprintln(cmd.OutOrStdout(), "ready: management plane is up")
+				}
+				if showNext {
+					if ui.Enabled() {
+						ui.Infof("")
+						ui.Successf("next: create a control plane")
+						ui.Successf("  kplane create cluster <name>")
+					} else {
+						fmt.Fprintln(cmd.OutOrStdout())
+						fmt.Fprintln(cmd.OutOrStdout(), "next: create a control plane")
+						fmt.Fprintln(cmd.OutOrStdout(), "  kplane create cluster <name>")
+					}
+				}
+				_ = markUICompletion(cfg, true, false)
 				return nil
 			default:
 				return fmt.Errorf("unsupported stack version %q", resolvedVersion)
@@ -142,6 +176,8 @@ func newUpCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&installCRDs, "install-crds", true, "Install CRDs before deploying operator")
 	cmd.Flags().StringVar(&kubeconfigOut, "kubeconfig", "", "Kubeconfig path to update")
 	cmd.Flags().BoolVar(&setCurrent, "set-current", true, "Set current kubeconfig context")
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "Disable progress output")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 
 	return cmd
 }

@@ -30,6 +30,7 @@ type Profile struct {
 	Images         Images   `yaml:"images"`
 	Auth           Auth     `yaml:"auth"`
 	Kind           KindOpts `yaml:"kind"`
+	UI             UIOpts   `yaml:"ui"`
 }
 
 type Images struct {
@@ -47,6 +48,13 @@ type KindOpts struct {
 	NodeImage   string `yaml:"nodeImage"`
 	ConfigPath  string `yaml:"configPath"`
 	IngressPort int    `yaml:"ingressPort"`
+}
+
+type UIOpts struct {
+	Enabled         bool `yaml:"enabled"`
+	Color           bool `yaml:"color"`
+	UpHintCount     int  `yaml:"upHintCount"`
+	CreateHintCount int  `yaml:"createHintCount"`
 }
 
 func Default() Config {
@@ -74,6 +82,10 @@ func Default() Config {
 				Kind: KindOpts{
 					NodeImage:   "kindest/node:v1.29.2",
 					IngressPort: 8443,
+				},
+				UI: UIOpts{
+					Enabled: true,
+					Color:   true,
 				},
 			},
 		},
@@ -116,6 +128,20 @@ func Load(path string) (Config, error) {
 		cfg.Profiles = map[string]Profile{}
 	}
 	return cfg, nil
+}
+
+func Save(path string, cfg Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("serialize config: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
 }
 
 func (c Config) ActiveProfile() (Profile, error) {
