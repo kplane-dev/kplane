@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# Binaries
+/bin/
+/kplane
 # Test binary, built with `go test -c`
 *.test
 

@@ -1,0 +1,57 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - controlplane.kplane.dev
+  resources:
+  - controlplaneclasses
+  - controlplaneendpoints
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - controlplane.kplane.dev
+  resources:
+  - controlplaneregistrations
+  - controlplanes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - controlplane.kplane.dev
+  resources:
+  - controlplaneregistrations/finalizers
+  - controlplanes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - controlplane.kplane.dev
+  resources:
+  - controlplaneregistrations/status
+  - controlplanes/status
+  verbs:
+  - get
+  - patch
+  - update

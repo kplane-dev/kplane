@@ -1,0 +1,12 @@
+apiVersion: controlplane.kplane.dev/v1alpha1
+kind: OperatorConfig
+clusterPathPrefix: /clusters
+controlPlaneSegment: control-plane
+managementNamespacePrefix: kplane-cp-
+virtualAdminNamespace: kplane-system
+virtualAdminServiceAccount: controlplane-admin
+virtualAdminClusterRoleBinding: controlplane-admin
+maxConcurrentReconciles: 32
+etcdEndpoints:
+  - http://kplane-etcd.kplane-system.svc.cluster.local:2379
+etcdPrefix: /registry
