@@ -57,11 +57,16 @@ fi
 
 add_alias() {
   rc_file="$1"
-  if [ -f "${rc_file}" ] && ! grep -q '^alias kp="kplane"$' "${rc_file}"; then
+  if [ ! -f "${rc_file}" ]; then
+    echo "rc file not found: ${rc_file} (skipping alias)"
+    return
+  fi
+  if ! grep -q '^alias kp="kplane"$' "${rc_file}"; then
     printf '\n# kplane\nalias kp="kplane"\n' >> "${rc_file}"
     echo "added alias to ${rc_file}"
-    echo "reload your shell to use kp (e.g. 'source ${rc_file}')"
+    return
   fi
+  echo "alias already present in ${rc_file}"
 }
 
 if [ -n "${SHELL:-}" ]; then
@@ -72,3 +77,4 @@ if [ -n "${SHELL:-}" ]; then
 fi
 
 echo "installed ${TARGET}"
+echo "reload your shell to use kp (e.g. 'source ~/.zshrc' or 'source ~/.bashrc')"
