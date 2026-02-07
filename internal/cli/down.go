@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"fmt"
-
-	kindprovider "github.com/kplane-dev/kplane/internal/provider/kind"
+	"github.com/kplane-dev/kplane/internal/providers"
 	"github.com/spf13/cobra"
 )
 
@@ -28,17 +26,18 @@ func newDownCommand() *cobra.Command {
 			if clusterName == "" {
 				clusterName = profile.ClusterName
 			}
-			if provider != "kind" {
-				return fmt.Errorf("unsupported provider %q", provider)
-			}
-			if err := kindprovider.EnsureInstalled(); err != nil {
+			clusterProvider, err := providers.New(provider)
+			if err != nil {
 				return err
 			}
-			return kindprovider.DeleteCluster(cmd.Context(), clusterName)
+			if err := clusterProvider.EnsureInstalled(); err != nil {
+				return err
+			}
+			return clusterProvider.DeleteCluster(cmd.Context(), clusterName)
 		},
 	}
 
-	cmd.Flags().StringVar(&provider, "provider", "", "Cluster provider (kind)")
+	cmd.Flags().StringVar(&provider, "provider", "", "Cluster provider (default: kind)")
 	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "Cluster name")
 
 	return cmd

@@ -9,7 +9,8 @@ import (
 	"github.com/kplane-dev/kplane/internal/config"
 	"github.com/kplane-dev/kplane/internal/kubeconfig"
 	"github.com/kplane-dev/kplane/internal/kubectl"
-	kindprovider "github.com/kplane-dev/kplane/internal/provider/kind"
+	providerpkg "github.com/kplane-dev/kplane/internal/provider"
+	"github.com/kplane-dev/kplane/internal/providers"
 	stacklatest "github.com/kplane-dev/kplane/internal/stack/latest"
 	"github.com/spf13/cobra"
 )
@@ -48,10 +49,11 @@ func newUpCommand() *cobra.Command {
 
 			applyUpDefaults(&provider, &clusterName, &namespace, &apiserverImg, &operatorImg, &etcdImg, &stackVersion, &crdSource, &kubeconfigOut, &setCurrent, profile)
 
-			if provider != "kind" {
-				return fmt.Errorf("unsupported provider %q", provider)
+			clusterProvider, err := providers.New(provider)
+			if err != nil {
+				return err
 			}
-			if err := kindprovider.EnsureInstalled(); err != nil {
+			if err := clusterProvider.EnsureInstalled(); err != nil {
 				return err
 			}
 			if err := kubectl.EnsureInstalled(); err != nil {
@@ -59,42 +61,41 @@ func newUpCommand() *cobra.Command {
 			}
 
 			ctx := cmd.Context()
-			exists, err := kindprovider.ClusterExists(ctx, clusterName)
+			exists, err := clusterProvider.ClusterExists(ctx, clusterName)
 			if err != nil {
 				return err
 			}
 			var ingressPort int
+			providerName := clusterProvider.Name()
 			if !exists {
-				if err := ui.Step("kind: creating management cluster "+clusterName, func() error {
+				if err := ui.Step(providerName+": creating management cluster "+clusterName, func() error {
 					var err error
-					ingressPort, err = resolveIngressPort(profile.Kind.IngressPort)
+					ingressPort, err = resolveIngressPort(resolveIngressPortSetting(providerName, profile))
 					if err != nil {
 						return err
 					}
-					configPath := profile.Kind.ConfigPath
-					if configPath == "" {
-						configPath, err = writeKindConfig(ingressPort)
-						if err != nil {
-							return err
-						}
+					createOpts, err := buildCreateOptions(providerName, profile, ingressPort)
+					if err != nil {
+						return err
 					}
-					return kindprovider.CreateCluster(ctx, kindprovider.CreateOptions{
-						Name:       clusterName,
-						NodeImage:  profile.Kind.NodeImage,
-						ConfigPath: configPath,
+					return clusterProvider.CreateCluster(ctx, providerpkg.CreateClusterOptions{
+						Name:        clusterName,
+						NodeImage:   createOpts.NodeImage,
+						ConfigPath:  createOpts.ConfigPath,
+						IngressPort: ingressPort,
 					})
 				}); err != nil {
 					return err
 				}
 			} else {
 				if ui.Enabled() {
-					ui.Infof("kind: reusing existing cluster %s", clusterName)
+					ui.Infof("%s: reusing existing cluster %s", providerName, clusterName)
 				}
-				ingressPort = resolveIngressPortFromCluster(ctx, fmt.Sprintf("kind-%s", clusterName), namespace)
+				ingressPort = resolveIngressPortFromCluster(ctx, clusterProvider.ContextName(clusterName), namespace)
 			}
 
 			if err := ui.Step("kubeconfig: updating", func() error {
-				kubeconfigData, err := kindprovider.GetKubeconfig(ctx, clusterName)
+				kubeconfigData, err := clusterProvider.GetKubeconfig(ctx, clusterName)
 				if err != nil {
 					return err
 				}
@@ -103,7 +104,7 @@ func newUpCommand() *cobra.Command {
 				return err
 			}
 
-			contextName := fmt.Sprintf("kind-%s", clusterName)
+			contextName := clusterProvider.ContextName(clusterName)
 			if err := ui.Step("nodes: labeling ingress-ready", func() error {
 				return kubectl.LabelNodes(ctx, contextName, map[string]string{"ingress-ready": "true"})
 			}); err != nil {
@@ -160,6 +161,9 @@ func newUpCommand() *cobra.Command {
 						fmt.Fprintln(cmd.OutOrStdout(), "  kplane create cluster <name>")
 					}
 				}
+				if err := setProfileProvider(cfg, providerName); err != nil {
+					return err
+				}
 				_ = markUICompletion(cfg, true, false)
 				return nil
 			default:
@@ -168,7 +172,7 @@ func newUpCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&provider, "provider", "", "Cluster provider (kind)")
+	cmd.Flags().StringVar(&provider, "provider", "", "Cluster provider (default: kind)")
 	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "Cluster name")
 	cmd.Flags().StringVar(&namespace, "namespace", "", "Namespace for kplane system")
 	cmd.Flags().StringVar(&apiserverImg, "apiserver-image", "", "Apiserver image")
@@ -214,6 +218,40 @@ func applyUpDefaults(provider, clusterName, namespace, apiserverImg, operatorImg
 		*kubeconfigOut = profile.KubeconfigPath
 	}
 	_ = setCurrent
+}
+
+type createOptions struct {
+	NodeImage  string
+	ConfigPath string
+}
+
+func resolveIngressPortSetting(providerName string, profile config.Profile) int {
+	switch providerName {
+	case "k3s":
+		return profile.K3s.IngressPort
+	default:
+		return profile.Kind.IngressPort
+	}
+}
+
+func buildCreateOptions(providerName string, profile config.Profile, ingressPort int) (createOptions, error) {
+	switch providerName {
+	case "k3s":
+		return createOptions{NodeImage: profile.K3s.Image}, nil
+	default:
+		configPath := profile.Kind.ConfigPath
+		if configPath == "" {
+			var err error
+			configPath, err = writeKindConfig(ingressPort)
+			if err != nil {
+				return createOptions{}, err
+			}
+		}
+		return createOptions{
+			NodeImage:  profile.Kind.NodeImage,
+			ConfigPath: configPath,
+		}, nil
+	}
 }
 
 func resolveStackVersion(requested string) (string, error) {

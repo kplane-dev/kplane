@@ -6,7 +6,7 @@ import (
 
 	"github.com/kplane-dev/kplane/internal/kubeconfig"
 	"github.com/kplane-dev/kplane/internal/kubectl"
-	kindprovider "github.com/kplane-dev/kplane/internal/provider/kind"
+	"github.com/kplane-dev/kplane/internal/providers"
 	"github.com/spf13/cobra"
 )
 
@@ -41,11 +41,11 @@ func newGetCredentialsCommand() *cobra.Command {
 				kubeconfigOut = profile.KubeconfigPath
 			}
 
-			if provider != "kind" {
-				return fmt.Errorf("unsupported provider %q", provider)
+			clusterProvider, err := providers.New(provider)
+			if err != nil {
+				return err
 			}
-
-			if err := kindprovider.EnsureInstalled(); err != nil {
+			if err := clusterProvider.EnsureInstalled(); err != nil {
 				return err
 			}
 			if err := kubectl.EnsureInstalled(); err != nil {
@@ -55,17 +55,17 @@ func newGetCredentialsCommand() *cobra.Command {
 			_ = region
 			_ = project
 
-			if exists, err := kindprovider.ClusterExists(cmd.Context(), clusterName); err != nil {
+			if exists, err := clusterProvider.ClusterExists(cmd.Context(), clusterName); err != nil {
 				return err
 			} else if exists {
-				kubeconfigData, err := kindprovider.GetKubeconfig(cmd.Context(), clusterName)
+				kubeconfigData, err := clusterProvider.GetKubeconfig(cmd.Context(), clusterName)
 				if err != nil {
 					return err
 				}
 				return kubeconfig.MergeAndWrite(kubeconfigOut, kubeconfigData, setCurrent)
 			}
 
-			managementCtx := fmt.Sprintf("kind-%s", profile.ClusterName)
+			managementCtx := clusterProvider.ContextName(profile.ClusterName)
 			timeout := 5 * time.Minute
 			ready, err := kubectl.GetJSONPath(cmd.Context(), managementCtx, "controlplane", clusterName, "", "{.status.conditions[?(@.type==\"Ready\")].status}")
 			if err != nil || ready != "True" {
@@ -99,7 +99,7 @@ func newGetCredentialsCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&provider, "provider", "", "Cluster provider (kind)")
+	cmd.Flags().StringVar(&provider, "provider", "", "Cluster provider (default: kind)")
 	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "Cluster name")
 	cmd.Flags().StringVar(&kubeconfigOut, "kubeconfig", "", "Kubeconfig path to update")
 	cmd.Flags().BoolVar(&setCurrent, "set-current", true, "Set current kubeconfig context")

@@ -28,3 +28,16 @@ func markUICompletion(cfg config.Config, markUp, markCreate bool) error {
 	cfg.Profiles[cfg.CurrentProfile] = profile
 	return saveConfig(cfg)
 }
+
+func setProfileProvider(cfg config.Config, provider string) error {
+	profile, ok := cfg.Profiles[cfg.CurrentProfile]
+	if !ok {
+		return fmt.Errorf("profile %q not found in config", cfg.CurrentProfile)
+	}
+	if provider == "" || profile.Provider == provider {
+		return nil
+	}
+	profile.Provider = provider
+	cfg.Profiles[cfg.CurrentProfile] = profile
+	return saveConfig(cfg)
+}

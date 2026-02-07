@@ -30,6 +30,7 @@ type Profile struct {
 	Images         Images   `yaml:"images"`
 	Auth           Auth     `yaml:"auth"`
 	Kind           KindOpts `yaml:"kind"`
+	K3s            K3sOpts  `yaml:"k3s"`
 	UI             UIOpts   `yaml:"ui"`
 }
 
@@ -47,6 +48,11 @@ type Auth struct {
 type KindOpts struct {
 	NodeImage   string `yaml:"nodeImage"`
 	ConfigPath  string `yaml:"configPath"`
+	IngressPort int    `yaml:"ingressPort"`
+}
+
+type K3sOpts struct {
+	Image       string `yaml:"image"`
 	IngressPort int    `yaml:"ingressPort"`
 }
 
@@ -81,6 +87,10 @@ func Default() Config {
 				},
 				Kind: KindOpts{
 					NodeImage:   "kindest/node:v1.29.2",
+					IngressPort: 8443,
+				},
+				K3s: K3sOpts{
+					Image:       "rancher/k3s:v1.29.2-k3s1",
 					IngressPort: 8443,
 				},
 				UI: UIOpts{

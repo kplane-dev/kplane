@@ -48,9 +48,11 @@ xattr -d com.apple.quarantine ./kplane-<os>-<arch>
 ## Prereqs
 
 - Go 1.22+ (to build the CLI)
-- Docker (for Kind)
-- `kind` in your PATH
 - `kubectl` in your PATH
+- Docker (for local providers)
+- One of:
+  - `kind` in your PATH (default)
+  - `k3d` in your PATH (for k3s-in-docker)
 
 ## Getting Started
 
@@ -60,10 +62,22 @@ Build the CLI:
 go build -o ./bin/kplane ./cmd/kplane
 ```
 
-Bring up the management plane:
+Bring up the management plane (Kind):
 
 ```
 ./bin/kplane up
+```
+
+Bring up the management plane (k3s via k3d):
+
+```
+./bin/kplane up --provider k3s
+```
+
+Set the default provider (optional):
+
+```
+./bin/kplane config set-provider k3s
 ```
 
 Create a virtual control plane:
@@ -87,8 +101,9 @@ kubectl get ns
 
 ## How It Works
 
-- `kplane up` creates (or reuses) a Kind cluster and installs the management
-  plane stack (etcd, shared apiserver, controlplane-operator, CRDs).
+- `kplane up` creates (or reuses) a local management cluster (Kind or k3s via
+  k3d) and installs the management plane stack (etcd, shared apiserver,
+  controlplane-operator, CRDs).
 - `kplane create cluster <name>` creates a `ControlPlane` and a
   `ControlPlaneEndpoint` in the management cluster.
 - Each VCP is served by the shared apiserver, isolated by path:
@@ -105,14 +120,15 @@ Planned for later releases:
 
 ## Commands
 
-- `kplane up` — creates or reuses the Kind management cluster and installs the
-  management plane stack (etcd, shared apiserver, controlplane-operator, CRDs).
-- `kplane down` — deletes the management Kind cluster.
+- `kplane up` — creates or reuses the local management cluster (Kind or k3s
+  via k3d) and installs the management plane stack (etcd, shared apiserver,
+  controlplane-operator, CRDs).
+- `kplane down` — deletes the management cluster.
 - `kplane create cluster <name>` — creates a `ControlPlane` and
   `ControlPlaneEndpoint` and writes a VCP kubeconfig context.
 - `kplane cc <name>` — alias for `kplane create cluster <name>`.
 - `kplane get clusters` — lists the management cluster and existing VCPs.
-- `kplane get-credentials <name>` — writes kubeconfig for a Kind cluster or VCP
-  and optionally switches the current context.
+- `kplane get-credentials <name>` — writes kubeconfig for a local management
+  cluster or VCP and optionally switches the current context.
 - `kplane config use-context <name>` — switches your kubeconfig context (aliasing
   `kubectl config use-context`).

@@ -6,7 +6,7 @@ import (
 
 	"github.com/kplane-dev/kplane/internal/kubeconfig"
 	"github.com/kplane-dev/kplane/internal/kubectl"
-	kindprovider "github.com/kplane-dev/kplane/internal/provider/kind"
+	"github.com/kplane-dev/kplane/internal/providers"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +16,7 @@ func newConfigCommand() *cobra.Command {
 		Short: "Manage kubeconfig",
 	}
 	cmd.AddCommand(newUseContextCommand())
+	cmd.AddCommand(newSetProviderCommand())
 	return cmd
 }
 
@@ -36,25 +37,29 @@ func newUseContextCommand() *cobra.Command {
 				kubeconfigPath = profile.KubeconfigPath
 			}
 
-			name := normalizeContextName(args[0])
-			if strings.HasPrefix(name, "kind-") && profile.Provider == "kind" {
-				if err := kindprovider.EnsureInstalled(); err != nil {
+			clusterProvider, err := providers.New(profile.Provider)
+			if err != nil {
+				return err
+			}
+			name := normalizeContextName(args[0], clusterProvider.ContextPrefix())
+			if strings.HasPrefix(name, clusterProvider.ContextPrefix()) {
+				if err := clusterProvider.EnsureInstalled(); err != nil {
 					return err
 				}
-				clusterName := strings.TrimPrefix(name, "kind-")
-				exists, err := kindprovider.ClusterExists(cmd.Context(), clusterName)
+				clusterName := strings.TrimPrefix(name, clusterProvider.ContextPrefix())
+				exists, err := clusterProvider.ClusterExists(cmd.Context(), clusterName)
 				if err != nil {
 					return err
 				}
 				if !exists {
-					return fmt.Errorf("kind cluster %q not found", clusterName)
+					return fmt.Errorf("%s cluster %q not found", clusterProvider.Name(), clusterName)
 				}
 			}
 			if strings.HasPrefix(name, "kplane-") {
 				if err := kubectl.EnsureInstalled(); err != nil {
 					return err
 				}
-				managementCtx := fmt.Sprintf("kind-%s", profile.ClusterName)
+				managementCtx := clusterProvider.ContextName(profile.ClusterName)
 				controlPlaneName := strings.TrimPrefix(name, "kplane-")
 				if controlPlaneName == "" {
 					return fmt.Errorf("controlplane name is required")
@@ -75,12 +80,34 @@ func newUseContextCommand() *cobra.Command {
 	return cmd
 }
 
-func normalizeContextName(name string) string {
+func normalizeContextName(name, providerPrefix string) string {
 	if strings.HasPrefix(name, "kplane-") {
 		return name
 	}
-	if strings.HasPrefix(name, "kind-") {
+	if providerPrefix != "" && strings.HasPrefix(name, providerPrefix) {
 		return name
 	}
 	return "kplane-" + name
+}
+
+func newSetProviderCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "set-provider <name>",
+		Short: "Set the management plane provider for the current profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			providerName := args[0]
+			clusterProvider, err := providers.New(providerName)
+			if err != nil {
+				return err
+			}
+			cfg := mustConfig()
+			if err := setProfileProvider(cfg, clusterProvider.Name()); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "provider set to %s\n", clusterProvider.Name())
+			return nil
+		},
+	}
+	return cmd
 }
