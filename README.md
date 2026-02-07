@@ -62,19 +62,19 @@ Build the CLI:
 go build -o ./bin/kplane ./cmd/kplane
 ```
 
-Bring up the management plane (Kind):
+Bring up the management plane (default provider: Kind):
 
 ```
 ./bin/kplane up
 ```
 
-Bring up the management plane (k3s via k3d):
+Or bring up the management plane with k3s (via k3d):
 
 ```
 ./bin/kplane up --provider k3s
 ```
 
-Set the default provider (optional):
+If you want future commands to target a specific provider like k3s:
 
 ```
 ./bin/kplane config set-provider k3s
