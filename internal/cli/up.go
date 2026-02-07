@@ -9,7 +9,7 @@ import (
 	"github.com/kplane-dev/kplane/internal/config"
 	"github.com/kplane-dev/kplane/internal/kubeconfig"
 	"github.com/kplane-dev/kplane/internal/kubectl"
-	managementprovider "github.com/kplane-dev/kplane/internal/managementprovider"
+	providerpkg "github.com/kplane-dev/kplane/internal/provider"
 	"github.com/kplane-dev/kplane/internal/providers"
 	stacklatest "github.com/kplane-dev/kplane/internal/stack/latest"
 	"github.com/spf13/cobra"
@@ -78,7 +78,7 @@ func newUpCommand() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					return clusterProvider.CreateCluster(ctx, managementprovider.CreateClusterOptions{
+					return clusterProvider.CreateCluster(ctx, providerpkg.CreateClusterOptions{
 						Name:        clusterName,
 						NodeImage:   createOpts.NodeImage,
 						ConfigPath:  createOpts.ConfigPath,
