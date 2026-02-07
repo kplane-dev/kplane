@@ -8,7 +8,7 @@ import (
 
 	"github.com/kplane-dev/kplane/internal/kubeconfig"
 	"github.com/kplane-dev/kplane/internal/kubectl"
-	kindprovider "github.com/kplane-dev/kplane/internal/provider/kind"
+	"github.com/kplane-dev/kplane/internal/providers"
 	"github.com/spf13/cobra"
 )
 
@@ -42,21 +42,22 @@ func newGetClustersCommand() *cobra.Command {
 				return err
 			}
 
-			if profile.Provider != "kind" {
-				return fmt.Errorf("unsupported provider %q", profile.Provider)
+			clusterProvider, err := providers.New(profile.Provider)
+			if err != nil {
+				return err
 			}
-			if err := kindprovider.EnsureInstalled(); err != nil {
+			if err := clusterProvider.EnsureInstalled(); err != nil {
 				return err
 			}
 
-			clusters, err := kindprovider.ListClusters(cmd.Context())
+			clusters, err := clusterProvider.ListClusters(cmd.Context())
 			if err != nil {
 				return err
 			}
 			sort.Strings(clusters)
 
 			for _, cluster := range clusters {
-				ctxName := "kind-" + cluster
+				ctxName := clusterProvider.ContextName(cluster)
 				marker := " "
 				if ctxName == current {
 					marker = "*"
@@ -64,7 +65,7 @@ func newGetClustersCommand() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", marker, ctxName)
 			}
 
-			managementCtx := "kind-" + profile.ClusterName
+			managementCtx := clusterProvider.ContextName(profile.ClusterName)
 			controlplanes, err := listControlPlanes(cmd.Context(), managementCtx)
 			if err != nil {
 				return err
@@ -86,11 +87,11 @@ func newGetClustersCommand() *cobra.Command {
 	return cmd
 }
 
-func isKplaneContext(name, managementCluster string) bool {
+func isKplaneContext(name, providerPrefix, managementCluster string) bool {
 	if strings.HasPrefix(name, "kplane-") {
 		return true
 	}
-	if managementCluster != "" && name == "kind-"+managementCluster {
+	if providerPrefix != "" && managementCluster != "" && name == providerPrefix+managementCluster {
 		return true
 	}
 	return false

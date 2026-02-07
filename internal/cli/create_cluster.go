@@ -8,6 +8,7 @@ import (
 
 	"github.com/kplane-dev/kplane/internal/kubeconfig"
 	"github.com/kplane-dev/kplane/internal/kubectl"
+	"github.com/kplane-dev/kplane/internal/providers"
 	"github.com/spf13/cobra"
 )
 
@@ -55,6 +56,10 @@ func newCreateClusterCommandWithUse(useLine, short string) *cobra.Command {
 			}
 			showNext := profile.UI.CreateHintCount < 3
 			ui := NewUI(cmd.OutOrStdout(), profile.UI.Enabled && !quiet, profile.UI.Color && !noColor)
+			clusterProvider, err := providers.New(profile.Provider)
+			if err != nil {
+				return err
+			}
 
 			if name == "" {
 				name = args[0]
@@ -72,7 +77,7 @@ func newCreateClusterCommandWithUse(useLine, short string) *cobra.Command {
 				timeout = 5 * time.Minute
 			}
 			if managementCtx == "" {
-				managementCtx = fmt.Sprintf("kind-%s", profile.ClusterName)
+				managementCtx = clusterProvider.ContextName(profile.ClusterName)
 			}
 
 			if err := kubectl.EnsureInstalled(); err != nil {
@@ -162,7 +167,7 @@ func newCreateClusterCommandWithUse(useLine, short string) *cobra.Command {
 	cmd.Flags().BoolVar(&setCurrent, "set-current", true, "Set current kubeconfig context")
 	cmd.Flags().StringVar(&kubeconfigOut, "kubeconfig", "", "Kubeconfig path to update")
 	cmd.Flags().DurationVar(&timeout, "timeout", 5*time.Minute, "Wait timeout for controlplane readiness")
-	cmd.Flags().StringVar(&managementCtx, "management-context", "", "Kubeconfig context for management plane (kind-<cluster>)")
+	cmd.Flags().StringVar(&managementCtx, "management-context", "", "Kubeconfig context for management plane (<provider>-<cluster>)")
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "Disable progress output")
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 	return cmd
