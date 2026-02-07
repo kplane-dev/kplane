@@ -15,6 +15,32 @@ control planes (VCPs). Each VCP is a logical Kubernetes control plane backed
 by a shared API server, isolated by request path
 (`.../clusters/<name>/control-plane`).
 
+## Why This Matters
+
+Traditional Kubernetes control planes and clusters scale out by duplicating
+controllers, apiservers, and supporting infrastructure. That means per-cluster
+CPU and memory overhead just to keep the lights on. The
+[multicluster-runtime](https://github.com/kubernetes-sigs/multicluster-runtime)
+project showed that controllers can be made multi-cluster aware and share
+resources effectively. The apiserver side has had many proposals, but nothing
+has landed upstream.
+
+**Baseline kplane virtual control planes (VCPs) use about 0.8MB of memory per control plane.**
+
+Kplane explores a practical path forward: try to keep compatibility with upstream API
+contracts while virtualizing the apiserver, scheduler, and controller manager.
+([kplane-dev/apiserver](https://github.com/kplane-dev/apiserver)). The
+goal is to understand upstream limitations, solve them in a compatible way, and
+advocate the right upstream approaches.
+
+Highlights from the apiserver design:
+
+- Single store per resource with cluster-scoped key rewriting and one watchcache.
+- Server-owned cluster labels to enforce isolation and cache keying. (temporarily due to upstream limitations)
+- Per-cluster admission, webhook, and namespace lifecycle environments.
+- Shared client and informer pools to reduce per-cluster overhead.
+- CEL runtime caching and storage diagnostics for safer operations.
+
 ## Download (Latest)
 
 - [macOS (Apple Silicon)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-darwin-arm64)
