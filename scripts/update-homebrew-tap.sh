@@ -72,7 +72,19 @@ class Kplane < Formula
   end
 
   def install
-    bin.install "kplane"
+    if OS.mac?
+      if Hardware::CPU.arm?
+        bin.install "kplane-#{version}-darwin-arm64" => "kplane"
+      else
+        bin.install "kplane-#{version}-darwin-amd64" => "kplane"
+      end
+    elsif OS.linux?
+      if Hardware::CPU.arm?
+        bin.install "kplane-#{version}-linux-arm64" => "kplane"
+      else
+        bin.install "kplane-#{version}-linux-amd64" => "kplane"
+      end
+    end
   end
 end
 EOF
