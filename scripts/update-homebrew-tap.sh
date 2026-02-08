@@ -19,9 +19,23 @@ trap cleanup EXIT
 
 download() {
   local name="$1"
-  local url="https://github.com/kplane-dev/kplane/releases/download/${VERSION_TAG}/kplane-${VERSION_TAG}-${name}"
-  curl -fsSL -o "${TMP_DIR}/kplane-${name}" "${url}"
-  shasum -a 256 "${TMP_DIR}/kplane-${name}" | awk '{print $1}'
+  local versioned="https://github.com/kplane-dev/kplane/releases/download/${VERSION_TAG}/kplane-${VERSION_TAG}-${name}"
+  local unversioned="https://github.com/kplane-dev/kplane/releases/download/${VERSION_TAG}/kplane-${name}"
+  local out="${TMP_DIR}/kplane-${name}"
+  local attempt
+
+  for url in "${versioned}" "${unversioned}"; do
+    for attempt in {1..10}; do
+      if curl -fsSL -o "${out}" "${url}"; then
+        shasum -a 256 "${out}" | awk '{print $1}'
+        return 0
+      fi
+      sleep 3
+    done
+  done
+
+  echo "failed to download ${name} from ${VERSION_TAG} after retries" >&2
+  return 1
 }
 
 SHA_DARWIN_AMD64="$(download darwin-amd64)"
