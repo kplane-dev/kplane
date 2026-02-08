@@ -1,0 +1,45 @@
+name: update-homebrew-tap
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kplane
+        uses: actions/checkout@v4
+
+      - name: Load SSH key for tap
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.TAP_SSH_KEY }}
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: kplane-dev/homebrew-tap
+          path: homebrew-tap
+          ssh-key: ${{ secrets.TAP_SSH_KEY }}
+
+      - name: Update tap formula
+        run: |
+          ./scripts/update-homebrew-tap.sh "${GITHUB_REF_NAME}" "./homebrew-tap"
+
+      - name: Commit and push
+        working-directory: homebrew-tap
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "kplane-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add Formula/kplane.rb
+          git commit -m "Update kplane formula to ${GITHUB_REF_NAME}"
+          git push
