@@ -41,13 +41,14 @@ Highlights from the apiserver design:
 - Shared client and informer pools to reduce per-cluster overhead.
 - CEL runtime caching and storage diagnostics for safer operations.
 
-## Download (Latest)
+## Install (Homebrew)
 
-- [macOS (Apple Silicon)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-darwin-arm64)
-- [macOS (Intel)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-darwin-amd64)
-- [Linux (arm64)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-linux-arm64)
-- [Linux (amd64)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-linux-amd64)
-- [Windows (amd64)](https://github.com/kplane-dev/kplane/releases/latest/download/kplane-windows-amd64.exe)
+```
+brew tap kplane-dev/tap
+brew install kplane
+```
+
+## Install (Manual)
 
 Install to your PATH:
 
