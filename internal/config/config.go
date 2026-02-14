@@ -77,7 +77,7 @@ func Default() Config {
 				StackVersion:   "latest",
 				CRDSource:      "https://github.com/kplane-dev/controlplane-operator//config/crd?ref=main",
 				Images: Images{
-					Apiserver: "docker.io/kplanedev/apiserver:v0.0.6",
+					Apiserver: "docker.io/kplanedev/apiserver:v0.0.7",
 					Operator:  "docker.io/kplanedev/controlplane-operator:v0.0.3",
 					Etcd:      "quay.io/coreos/etcd:v3.5.13",
 				},
@@ -167,4 +167,44 @@ func userHomeDir() string {
 		return home
 	}
 	return os.Getenv("HOME")
+}
+
+func ApplyDefaultImageUpgrades(cfg Config) (Config, bool) {
+	defaultProfile := Default().Profiles["default"]
+	changed := false
+	for name, profile := range cfg.Profiles {
+		updated := profile
+		updated.Images.Apiserver = upgradeApiserverImage(profile.Images.Apiserver, defaultProfile.Images.Apiserver)
+		if updated.Images.Apiserver != profile.Images.Apiserver {
+			changed = true
+		}
+		cfg.Profiles[name] = updated
+	}
+	return cfg, changed
+}
+
+func upgradeApiserverImage(current, latest string) string {
+	if current == "" {
+		return latest
+	}
+	if isDefaultApiserverImage(current) {
+		return latest
+	}
+	return current
+}
+
+func isDefaultApiserverImage(image string) bool {
+	switch image {
+	case
+		"docker.io/kplanedev/apiserver:v0.0.1",
+		"docker.io/kplanedev/apiserver:v0.0.2",
+		"docker.io/kplanedev/apiserver:v0.0.3",
+		"docker.io/kplanedev/apiserver:v0.0.4",
+		"docker.io/kplanedev/apiserver:v0.0.5",
+		"docker.io/kplanedev/apiserver:v0.0.6",
+		"docker.io/kplanedev/apiserver:v0.0.7":
+		return true
+	default:
+		return false
+	}
 }

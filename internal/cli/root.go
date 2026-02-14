@@ -43,6 +43,14 @@ func loadConfig() (config.Config, error) {
 		return config.Config{}, err
 	}
 
+	updated, changed := config.ApplyDefaultImageUpgrades(cfg)
+	if changed {
+		if err := config.Save(path, updated); err != nil {
+			return config.Config{}, err
+		}
+		cfg = updated
+	}
+
 	return cfg, nil
 }
 

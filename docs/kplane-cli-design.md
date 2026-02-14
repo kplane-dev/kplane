@@ -36,7 +36,7 @@ kplane up
   --provider kind
   --cluster-name kplane-management
   --namespace kplane-system
-  --apiserver-image docker.io/kplanedev/apiserver:v0.0.6
+  --apiserver-image docker.io/kplanedev/apiserver:v0.0.7
   --operator-image docker.io/kplanedev/controlplane-operator:v0.0.3
   --etcd-image quay.io/coreos/etcd:v3.5.13
   --install-crds
@@ -192,7 +192,7 @@ profiles:
     kubeconfigPath: ~/.kube/config
     stackVersion: latest
     images:
-      apiserver: docker.io/kplanedev/apiserver:v0.0.6
+      apiserver: docker.io/kplanedev/apiserver:v0.0.7
       operator: docker.io/kplanedev/controlplane-operator:v0.0.3
       etcd: quay.io/coreos/etcd:v3.5.13
     auth:
